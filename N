@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Business Inventory & Sales Dashboard</title>
+    <style>
+        body { font-family: Arial; background: #f0fdf5; margin: 0; padding: 0; }
+        header { background: #3ca572; color: white; padding: 15px 30px; font-size: 20px; text-align: center; }
+        .container { width: 950px; margin: 20px auto; background: #fff; border-radius: 10px; padding: 25px; box-shadow: 0 0 12px #6ccd94; }
+        h2, h3 { color: #2e7d32; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        table, th, td { border: 1px solid #a5d6a7; }
+        th, td { padding: 8px; text-align: center; }
+        .btn { background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; }
+        .flex { display: flex; gap: 12px; align-items: center; margin-bottom: 15px; }
+        input, select { padding: 7px; border: 1px solid #c8e6c9; border-radius: 4px; }
+        #loginDiv, #dashboard { max-width: 900px; margin: 60px auto; }
+        #msg { margin-top: 10px; color: red; }
+    </style>
+</head>
+<body>
+
+<header id="header">Business Dashboard</header>
+
+<div id="loginDiv" class="container">
+    <h2>Login</h2>
+    <div class="flex">
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button class="btn" onclick="login()">Login</button>
+    </div>
+    <div id="msg"></div>
+</div>
+
+<div id="dashboard" class="container" style="display:none;">
+
+    <h2 id="businessNameH2" style="text-align:center; margin-bottom: 25px;"></h2>
+
+    <section>
+        <h3>Product Management</h3>
+        <div class="flex">
+            <input type="text" id="pname" placeholder="Product Name">
+            <input type="number" min="0" id="pstock" placeholder="Stock">
+            <input type="number" min="0" step="0.01" id="pbuy" placeholder="Buy Price">
+            <input type="number" min="0" step="0.01" id="psell" placeholder="Sale Price">
+            <button class="btn" onclick="addProduct()">Add Product</button>
+        </div>
+        <table id="productTable">
+            <thead>
+                <tr><th>Name</th><th>Stock</th><th>Buy Price</th><th>Sale Price</th><th>Profit/Item</th><th>Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </section>
+
+    <section>
+        <h3>New Order (Sale)</h3>
+        <div class="flex">
+            <select id="saleProduct"></select>
+            <input type="number" min="1" id="saleQty" placeholder="Quantity" value="1">
+            <input type="date" id="saleDate" title="Select Sale Date" />
+            <button class="btn" onclick="addToCart()">Add to Cart</button>
+        </div>
+        <table id="cartTable">
+            <thead>
+                <tr><th>Product</th><th>Price</th><th>Qty</th><th>Total</th><th>Remove</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <div style="font-weight: bold; margin-bottom: 15px;">Grand Total: Rs. <span id="grandTotal">0</span></div>
+        <div>
+            <input type="text" id="custName" placeholder="Customer Name">
+            <input type="text" id="custPhone" placeholder="Phone Number">
+            <input type="text" id="custCity" placeholder="City / Area">
+        </div>
+        <div style="margin-top: 10px;">
+            <input type="number" min="0" id="cashReceived" placeholder="Cash Received (Naqad)" style="width: 180px;">
+            <input type="number" min="0" id="dueAmount" placeholder="Due Amount (Idhar)" style="width: 180px;">
+        </div>
+        <button class="btn" style="margin-top: 12px;" onclick="submitOrder()">Submit Order</button>
+        <div id="orderMsg" style="margin-top: 10px;"></div>
+    </section>
+
+    <section>
+        <h3>Reports Summary</h3>
+        <label>Filter by: 
+            <select id="reportFilter" onchange="refreshReports()">
+                <option value="day">Today</option>
+                <option value="month">This Month</option>
+                <option value="all">All Time</option>
+            </select>
+        </label>
+
+        <table id="reportTable" style="margin-top: 12px;">
+            <thead>
+                <tr><th>Date</th><th>Total Sale (Rs.)</th><th>Total Cost (Rs.)</th><th>Profit (Rs.)</th><th>Cash Received</th><th>Due Amount</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </section>
+
+</div>
+
+<script>
+let products = [];
+let cart = [];
+let orders = [];
+const BUSINESS_NAME = "Canteen Hospital Choubara";
+
+document.getElementById('saleDate').value = new Date().toISOString().slice(0,10);
+
+// Login function
+function login() {
+    const u=document.getElementById('username').value.trim();
+    const p=document.getElementById('password').value.trim();
+    const msgEl = document.getElementById('msg');
+    if(u === "Khalil" && p === "khalilkhan123") {
+        msgEl.innerText = "";
+        document.getElementById('loginDiv').style.display = "none";
+        document.getElementById('dashboard').style.display = "block";
+        document.getElementById('businessNameH2').innerText = BUSINESS_NAME + " Inventory & Sales Dashboard";
+
+        refreshProductTable();
+        updateSalesProductDropdown();
+        refreshCartTable();
+        refreshReports();
+    } else {
+        msgEl.innerText = "Invalid credentials!";
+    }
+}
+
+// Product Section
+function refreshProductTable() {
+    let tbody = document.querySelector('#productTable tbody');
+    tbody.innerHTML = products.map((p,i) => `
+        <tr>
+            <td>${p.name}</td>
+            <td>${p.stock}</td>
+            <td>${p.buy.toFixed(2)}</td>
+            <td>${p.sell.toFixed(2)}</td>
+            <td>${(p.sell-p.buy).toFixed(2)}</td>
+            <td>
+                <button class="btn" onclick="editProduct(${i})">Edit</button> 
+                <button class="btn" onclick="deleteProduct(${i})">Delete</button>
+            </td>
+        </tr>
+    `).join("");
+}
+
+function addProduct() {
+    const name = document.getElementById('pname').value.trim();
+    const stock = parseInt(document.getElementById('pstock').value);
+    const buy = parseFloat(document.getElementById('pbuy').value);
+    const sell = parseFloat(document.getElementById('psell').value);
+    if(!name || isNaN(stock) || isNaN(buy) || isNaN(sell)) {
+        alert("Complete correct product details.");
+        return;
+    }
+    let exists = products.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
+    if(exists >= 0) {
+        alert("Product already exists. Edit it instead.");
+        return;
+    }
+    products.push({ name, stock, buy, sell });
+    clearProductForm();
+    refreshProductTable();
+    updateSalesProductDropdown();
+}
+
+function editProduct(i) {
+    const p = products[i];
+    document.getElementById('pname').value = p.name;
+    document.getElementById('pstock').value = p.stock;
+    document.getElementById('pbuy').value = p.buy;
+    document.getElementById('psell').value = p.sell;
+    products.splice(i, 1);
+    refreshProductTable();
+    updateSalesProductDropdown();
+}
+
+function deleteProduct(i) {
+    if(confirm("Are you sure to delete this product?")) {
+        products.splice(i, 1);
+        refreshProductTable();
+        updateSalesProductDropdown();
+    }
+}
+
+function clearProductForm() {
+    document.getElementById('pname').value = '';
+    document.getElementById('pstock').value = '';
+    document.getElementById('pbuy').value = '';
+    document.getElementById('psell').value = '';
+}
+
+// Sale Section
+function updateSalesProductDropdown() {
+    let sel = document.getElementById('saleProduct');
+    sel.innerHTML = products.map((p,i) => 
+        `<option value="${i}">${p.name} (Stock: ${p.stock})</option>`
+    ).join("");
+}
+
+function refreshCartTable() {
+    let tbody = document.querySelector('#cartTable tbody');
+    let total = 0;
+    tbody.innerHTML = cart.map((c,i) => {
+        let sum = c.price * c.qty;
+        total += sum;
+        return `<tr>
+            <td>${c.name}</td>
+            <td>${c.price.toFixed(2)}</td>
+            <td>${c.qty}</td>
+            <td>${sum.toFixed(2)}</td>
+            <td><button class="btn" onclick="removeCartItem(${i})">Remove</button></td>
+        </tr>`;
+    }).join("");
+    document.getElementById('grandTotal').innerText = total.toFixed(2);
+}
+
+function addToCart() {
+    const productIndex = parseInt(document.getElementById('saleProduct').value);
+    const qty = parseInt(document.getElementById('saleQty').value);
+    if(isNaN(qty) || qty < 1) {
+        alert("Enter valid quantity");
+        return;
+    }
+    if(products[productIndex].stock < qty) {
+        alert("Not enough stock!");
+        return;
+    }
+    let item = cart.find(c => c.name === products[productIndex].name);
+    if(item) {
+        if(products[productIndex].stock < item.qty + qty) {
+            alert("Not enough stock!");
+            return;
+        }
+        item.qty += qty;
+    } else {
+        cart.push({ name: products[productIndex].name, qty: qty, price: products[productIndex].sell, buy: products[productIndex].buy });
+    }
+    refreshCartTable();
+}
+
+function removeCartItem(i) {
+    cart.splice(i, 1);
+    refreshCartTable();
+}
+
+function submitOrder() {
+    const cname = document.getElementById('custName').value.trim();
+    const cphone = document.getElementById('custPhone').value.trim();
+    const ccity = document.getElementById('custCity').value.trim();
+    const cashReceived = parseFloat(document.getElementById('cashReceived').value) || 0;
+    const dueAmount = parseFloat(document.getElementById('dueAmount').value) || 0;
+    const saleDate = document.getElementById('saleDate').value;
+
+    if(!cname || !cphone || !ccity) {
+        alert("Enter customer details.");
+        return;
+    }
+    if(cart.length === 0) {
+        alert("Cart is empty.");
+        return;
+    }
+    if(!saleDate) {
+        alert("Select sale date.");
+        return;
+    }
+
+    // Reduce stock from products
+    for(const item of cart) {
+        let prod = products.find(p => p.name === item.name);
+        if(prod) {
+            prod.stock -= item.qty;
+        }
+    }
+
+    let totalSale = 0;
+    let totalCost = 0;
+    cart.forEach(item => {
+        totalSale += item.qty * item.price;
+        totalCost += item.qty * item.buy;
+    });
+    let profit = totalSale - totalCost;
+
+    // Save order record
+    orders.push({
+        date: saleDate,
+        customer: { name: cname, phone: cphone, city: ccity },
+        items: [...cart],
+        totalSale,
+        totalCost,
+        profit,
+        cashReceived,
+        dueAmount
+    });
+
+    // Clear form & cart
+    cart = [];
+    refreshCartTable();
+    refreshProductTable();
+    clearOrderFields();
+    refreshReports();
+
+    alert(`Order placed successfully!
+Profit: Rs. ${profit.toFixed(2)}`);
+}
+
+function clearOrderFields() {
+    document.getElementById('custName').value = '';
+    document.getElementById('custPhone').value = '';
+    document.getElementById('custCity').value = '';
+    document.getElementById('cashReceived').value = '';
+    document.getElementById('dueAmount').value = '';
+    document.getElementById('saleQty').value = 1;
+}
+
+// Report Section
+function refreshReports() {
+    let tbody = document.querySelector('#reportTable tbody');
+    tbody.innerHTML = '';
+
+    const filter = document.getElementById('reportFilter').value;
+    let filteredOrders = [];
+
+    const today = new Date();
+    for(let order of orders) {
+        let od = new Date(order.date);
+        if(filter === 'day') {
+            if(od.toDateString() === today.toDateString()) filteredOrders.push(order);
+        } else if(filter === 'month') {
+            if(od.getFullYear() === today.getFullYear() && od.getMonth() === today.getMonth()) filteredOrders.push(order);
+        } else {
+            filteredOrders.push(order);
+        }
+    }
+
+    let totalSale = 0;
+    let totalCost = 0;
+    let totalProfit = 0;
+    let totalCash = 0;
+    let totalDue = 0;
+
+    for(let o of filteredOrders) {
+        let dateStr = new Date(o.date).toLocaleDateString();
+        tbody.innerHTML += `<tr>
+            <td>${dateStr}</td>
+            <td>${o.totalSale.toFixed(2)}</td>
+            <td>${o.totalCost.toFixed(2)}</td>
+            <td>${o.profit.toFixed(2)}</td>
+            <td>${o.cashReceived.toFixed(2)}</td>
+            <td>${o.dueAmount.toFixed(2)}</td>
+        </tr>`;
+        totalSale += o.totalSale;
+        totalCost += o.totalCost;
+        totalProfit += o.profit;
+        totalCash += o.cashReceived;
+        totalDue += o.dueAmount;
+    }
+    // totals row
+    tbody.innerHTML += `<tr>
+        <th>Total</th>
+        <th>${totalSale.toFixed(2)}</th>
+        <th>${totalCost.toFixed(2)}</th>
+        <th>${totalProfit.toFixed(2)}</th>
+        <th>${totalCash.toFixed(2)}</th>
+        <th>${totalDue.toFixed(2)}</th>
+    </tr>`;
+}
+
+</script>
+</body>
+</html>
